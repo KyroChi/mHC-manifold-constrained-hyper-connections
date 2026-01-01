@@ -242,3 +242,69 @@ def test_channel_first_hyper_connection(disable):
     after_residual = reduce_stream(residual)
 
     assert before_residual.shape == after_residual.shape
+
+
+def test_disable_matches_residual():
+    torch.manual_seed(0)
+
+    branch = nn.Linear(32, 32)
+    residual = torch.randn(2, 16, 32)
+
+    expected = branch(residual) + residual
+
+    from hyper_connections import get_init_and_expand_reduce_stream_functions
+
+    init_hyper_conn, expand_stream, reduce_stream = (
+        get_init_and_expand_reduce_stream_functions(4, disable=True)
+    )
+
+    hyper_conn_branch = init_hyper_conn(dim=32, branch=branch)
+
+    output = reduce_stream(hyper_conn_branch(expand_stream(residual)))
+
+    torch.testing.assert_close(output, expected)
+
+
+def test_decorate_matches_manual():
+    torch.manual_seed(0)
+
+    branch = nn.Linear(32, 32)
+    residual = torch.randn(2, 16, 32)
+
+    from hyper_connections import get_init_and_expand_reduce_stream_functions
+
+    init_hyper_conn, expand_stream, reduce_stream = (
+        get_init_and_expand_reduce_stream_functions(4)
+    )
+
+    hyper_conn = init_hyper_conn(dim=32)
+    hyper_conn_branch = hyper_conn.decorate_branch(branch)
+
+    expanded = expand_stream(residual)
+    output_decorated = reduce_stream(hyper_conn_branch(expanded))
+
+    branch_input, add_residual = hyper_conn(expanded)
+    output_manual = reduce_stream(add_residual(branch(branch_input)))
+
+    torch.testing.assert_close(output_decorated, output_manual)
+
+
+def test_backward_smoke():
+    torch.manual_seed(0)
+
+    branch = nn.Linear(16, 16)
+    residual = torch.randn(2, 8, 16, requires_grad=True)
+
+    from hyper_connections import get_init_and_expand_reduce_stream_functions
+
+    init_hyper_conn, expand_stream, reduce_stream = (
+        get_init_and_expand_reduce_stream_functions(4)
+    )
+
+    hyper_conn_branch = init_hyper_conn(dim=16, branch=branch)
+
+    output = reduce_stream(hyper_conn_branch(expand_stream(residual)))
+    loss = output.sum()
+    loss.backward()
+
+    assert residual.grad is not None

@@ -211,3 +211,7 @@ reference-hc/
 docs/
 AGENTS.md
 .DS_Store
+examples/nanogpt/out*/
+examples/nanogpt/data/shakespeare_char/input.txt
+examples/nanogpt/data/shakespeare_char/*.bin
+examples/nanogpt/data/shakespeare_char/meta.json
