@@ -222,6 +222,11 @@ class GPT(nn.Module):
                     no_decay.add(full_name)
 
         param_dict = {pn: p for pn, p in self.named_parameters()}
+        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+
+        decay = {pn for pn in decay if pn in param_dict}
+        no_decay = {pn for pn in no_decay if pn in param_dict}
+
         assert len(decay & no_decay) == 0
         assert len(param_dict.keys() - (decay | no_decay)) == 0
 
