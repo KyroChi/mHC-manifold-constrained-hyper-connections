@@ -5,7 +5,7 @@
 #   python train.py config/train_fineweb10B_hc.py
 #   torchrun --standalone --nproc_per_node=4 train.py config/train_fineweb10B_hc.py
 
-out_dir = "out-fineweb10B-hc"
+out_dir = "out-fineweb10B"
 
 dataset = "fineweb10B"
 
@@ -13,15 +13,12 @@ dataset = "fineweb10B"
 block_size = 1024
 n_layer = 6
 n_head = 6
-n_embd = 384
+n_embd = 288
 dropout = 0.0
 bias = False
 
-# training - slightly smaller batch to account for HC memory overhead
-batch_size = 24
-gradient_accumulation_steps = (
-    6  # effective batch = 24 * 6 * 4 GPUs = 576 seqs (close to baseline)
-)
+batch_size = 32
+gradient_accumulation_steps = 4
 max_iters = 5000
 eval_interval = 500
 log_interval = 10

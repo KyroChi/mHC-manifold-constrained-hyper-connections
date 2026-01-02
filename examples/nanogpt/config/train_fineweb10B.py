@@ -13,7 +13,7 @@ dataset = "fineweb10B"
 block_size = 1024
 n_layer = 6
 n_head = 6
-n_embd = 384
+n_embd = 288
 dropout = 0.0
 bias = False
 
