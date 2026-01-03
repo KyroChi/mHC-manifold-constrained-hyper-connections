@@ -95,6 +95,49 @@ backend = "nccl"
 # load config file if provided
 exec(open(os.path.join(os.path.dirname(__file__), "configurator.py")).read())
 
+
+def get_wandb_variant():
+    if v_residual:
+        return "vres"
+    if mhc:
+        return "mhc"
+    if not hc_disable:
+        return "hc"
+    return "baseline"
+
+
+wandb_variant = get_wandb_variant()
+wandb_group = f"{dataset}-L{n_layer}-D{n_embd}-H{n_head}"
+wandb_run_name = f"{dataset}-{wandb_variant}-L{n_layer}-D{n_embd}-H{n_head}-s{seed}"
+wandb_job_type = wandb_variant
+wandb_tags = [
+    dataset,
+    wandb_variant,
+    f"L{n_layer}",
+    f"D{n_embd}",
+    f"H{n_head}",
+    f"streams={hc_num_streams}",
+    f"fracs={hc_num_fracs}",
+    f"block={block_size}",
+    f"dtype={dtype}",
+    f"lr={learning_rate:g}",
+    f"wd={weight_decay:g}",
+    f"seed={seed}",
+]
+
+if mhc:
+    wandb_tags.extend(
+        [
+            f"sinkhorn_iters={sinkhorn_iters}",
+            f"sinkhorn_tau={sinkhorn_tau:g}",
+            f"mhc_res_proj={mhc_h_res_proj}",
+            f"ns_steps={ns_steps}",
+        ]
+    )
+
+if v_residual:
+    wandb_tags.append("v_residual")
+
 # -----------------------------------------------------------------------------
 # DDP setup
 
@@ -194,7 +237,6 @@ if dataset == "fineweb10B":
         print(f"Train tokens: {len(train_data):,}, Val tokens: {len(val_data):,}")
 
     vocab_size = 50304  # GPT-2 vocab size rounded up for efficiency
-
 else:
     # Shakespeare char-level (legacy)
     train_path = os.path.join(data_dir, "train.bin")
@@ -408,6 +450,9 @@ if wandb_log and master_process:
     wandb.init(
         project=wandb_project,
         name=wandb_run_name,
+        group=wandb_group,
+        job_type=wandb_job_type,
+        tags=wandb_tags,
         config={
             "dataset": dataset,
             "n_layer": n_layer,

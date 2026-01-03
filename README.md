@@ -23,25 +23,31 @@ This is a research prototype aimed at correctness + clarity, not the paper's sys
 
 ### Running (nanoGPT on FineWeb10B)
 
-**Baseline** (no hyper-connections):
-
-```bash
-torchrun --standalone --nproc_per_node=4 train.py config/train_fineweb10B.py
-```
-
-**HC** (vanilla Hyper-Connections):
-
-```bash
-torchrun --standalone --nproc_per_node=4 train.py config/train_fineweb10B_hc.py
-```
-
-**mHC** (Manifold-Constrained Hyper-Connections):
-
-```bash
-torchrun --standalone --nproc_per_node=4 train.py config/train_fineweb10B_mhc.py
-```
-
 Run from `examples/nanogpt/`. Adjust `--nproc_per_node` to match your GPU count.
+
+**6-layer configs (~20M params):**
+```bash
+python train.py config/train_fineweb10B.py
+python train.py config/train_fineweb10B_hc.py
+python train.py config/train_fineweb10B_mhc.py
+python train.py config/train_fineweb10B_vres.py
+```
+
+**48-layer configs (~20M params):**
+```bash
+python train.py config/train_fineweb10B_48l.py
+python train.py config/train_fineweb10B_hc_48l.py
+python train.py config/train_fineweb10B_mhc_48l.py
+python train.py config/train_fineweb10B_vres_48l.py
+```
+
+**Multi-GPU example:**
+```bash
+torchrun --standalone --nproc_per_node=4 train.py config/train_fineweb10B_mhc_48l.py
+```
+
+#### Orthostochastic mHC option
+mHC supports an orthostochastic H_res projection via Newton-Schulz. Set `mhc_h_res_proj = "orthostochastic"` in your config and keep `ns_steps`, `ns_eps`, `ns_coeffs` as provided in the mHC configs.
 
 ### Next steps planned
 - [x] Value residual ablations with baseline/HC/mHC
