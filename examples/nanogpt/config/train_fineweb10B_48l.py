@@ -19,8 +19,8 @@ dropout = 0.0
 bias = False
 
 # training
-batch_size = 32
-gradient_accumulation_steps = 4  # effective batch = 32 * 4 * 4 GPUs = 512 seqs
+batch_size = 8
+gradient_accumulation_steps = 4  # effective batch = 8 * 4 * 4 GPUs = 128 seqs
 max_iters = 5000
 eval_interval = 500
 log_interval = 10
