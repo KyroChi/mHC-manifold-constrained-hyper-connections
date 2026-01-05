@@ -74,6 +74,10 @@ ns_coeffs = (3.0, -3.2, 1.2)
 v_residual = False
 v_residual_lamb_lr = 1e-2
 
+# dual stream config (convex dual stream with pre/post layer norm)
+dual_stream = False
+dual_stream_weight = 0.5  # weight for pre-LN stream (1 - weight for post-LN)
+
 # dtype: "float32", "bfloat16", "float16"
 dtype = "bfloat16"
 
@@ -97,6 +101,10 @@ exec(open(os.path.join(os.path.dirname(__file__), "configurator.py")).read())
 
 
 def get_wandb_variant():
+    if dual_stream:
+        # Include weight in variant name for clarity
+        w = int(dual_stream_weight * 100)
+        return f"dual_stream_{w}_{100-w}"
     if v_residual:
         return "vres"
     if mhc:
@@ -190,7 +198,11 @@ else:
 # -----------------------------------------------------------------------------
 # Data loading
 
-data_dir = os.path.join(os.path.dirname(__file__), "data", dataset)
+# Use FINEWEB_DATA_DIR env var if set, otherwise fall back to relative path
+if dataset == "fineweb10B":
+    data_dir = os.environ.get("FINEWEB_DATA_DIR", os.path.join(os.path.dirname(__file__), "data", dataset))
+else:
+    data_dir = os.path.join(os.path.dirname(__file__), "data", dataset)
 
 if dataset == "fineweb10B":
     # FineWeb10B: pretokenized GPT-2 shards
@@ -295,6 +307,8 @@ model_config = GPTConfig(
     ns_coeffs=ns_coeffs,
     v_residual=v_residual,
     v_residual_lamb_lr=v_residual_lamb_lr,
+    dual_stream=dual_stream,
+    dual_stream_weight=dual_stream_weight,
 )
 
 model = GPT(model_config)
@@ -311,9 +325,11 @@ raw_model = model.module if ddp else model
 
 if wandb_log and wandb_log_layer_stats:
     for block in raw_model.transformer.h:
-        for hc in (block.hc_attn, block.hc_mlp):
-            if isinstance(hc, HyperConnections):
-                hc.collect_stats = True
+        # DualStreamBlock doesn't have hc_attn/hc_mlp
+        if hasattr(block, 'hc_attn') and hasattr(block, 'hc_mlp'):
+            for hc in (block.hc_attn, block.hc_mlp):
+                if isinstance(hc, HyperConnections):
+                    hc.collect_stats = True
 
 optimizer = raw_model.configure_optimizers(
     weight_decay=weight_decay,
@@ -342,6 +358,9 @@ def collect_hc_layer_stats():
     layer_count = len(raw_model.transformer.h) * 2
     layer_stats = {}
     for block_idx, block in enumerate(raw_model.transformer.h):
+        # DualStreamBlock doesn't have hc_attn/hc_mlp
+        if not hasattr(block, 'hc_attn') or not hasattr(block, 'hc_mlp'):
+            continue
         for sub_idx, hc in enumerate((block.hc_attn, block.hc_mlp)):
             if not hasattr(hc, "last_stats"):
                 continue
@@ -474,6 +493,8 @@ if wandb_log and master_process:
             "ns_coeffs": ns_coeffs,
             "v_residual": v_residual,
             "v_residual_lamb_lr": v_residual_lamb_lr,
+            "dual_stream": dual_stream,
+            "dual_stream_weight": dual_stream_weight,
             "dtype": dtype,
             "world_size": ddp_world_size,
             "tokens_per_iter": tokens_per_iter,

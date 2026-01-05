@@ -154,6 +154,56 @@ class Block(nn.Module):
         return x
 
 
+class DualStreamBlock(nn.Module):
+    """
+    Convex Dual Stream block with two parallel residual streams:
+    - Stream 1: Pre-layer norm (norm before sublayer, standard transformer style)
+    - Stream 2: Post-layer norm (sublayer then norm)
+    
+    Streams are combined with configurable weights (w1, 1-w1) where w1 = dual_stream_weight.
+    """
+    def __init__(self, config):
+        super().__init__()
+        
+        # Stream weight: w1 for pre-LN, (1-w1) for post-LN
+        self.w1 = config.dual_stream_weight
+        self.w2 = 1.0 - self.w1
+        
+        # Stream 1: Pre-LN components (norm -> sublayer)
+        self.ln1_pre_attn = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln1_pre_mlp = LayerNorm(config.n_embd, bias=config.bias)
+        
+        # Stream 2: Post-LN components (sublayer -> norm)
+        self.ln2_post_attn = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln2_post_mlp = LayerNorm(config.n_embd, bias=config.bias)
+        
+        # Shared sublayers (attention and MLP used by both streams)
+        self.attn = CausalSelfAttention(config)
+        self.mlp = MLP(config)
+
+    def forward(self, x, vrl_state=None):
+        # Split input into two streams
+        s1 = x  # Stream 1: Pre-LN
+        s2 = x  # Stream 2: Post-LN
+        
+        # Attention sublayer
+        # Stream 1 (Pre-LN): norm -> attn -> add residual
+        s1 = s1 + self.attn(self.ln1_pre_attn(s1), vrl_state=vrl_state)
+        # Stream 2 (Post-LN): attn -> norm -> add residual
+        s2 = s2 + self.ln2_post_attn(self.attn(s2, vrl_state=vrl_state))
+        
+        # MLP sublayer
+        # Stream 1 (Pre-LN): norm -> mlp -> add residual
+        s1 = s1 + self.mlp(self.ln1_pre_mlp(s1))
+        # Stream 2 (Post-LN): mlp -> norm -> add residual
+        s2 = s2 + self.ln2_post_mlp(self.mlp(s2))
+        
+        # Combine streams with configured weights
+        x = self.w1 * s1 + self.w2 * s2
+        
+        return x
+
+
 class GPTConfig:
     def __init__(self, **kwargs):
         self.block_size = kwargs.pop("block_size", 1024)
@@ -176,6 +226,8 @@ class GPTConfig:
         self.ns_coeffs = kwargs.pop("ns_coeffs", (3.0, -3.2, 1.2))
         self.v_residual = kwargs.pop("v_residual", False)
         self.v_residual_lamb_lr = kwargs.pop("v_residual_lamb_lr", 1e-2)
+        self.dual_stream = kwargs.pop("dual_stream", False)
+        self.dual_stream_weight = kwargs.pop("dual_stream_weight", 0.5)  # weight for pre-LN stream
 
         for key, value in kwargs.items():
             setattr(self, key, value)
@@ -201,14 +253,18 @@ class GPT(nn.Module):
         self.expand_stream = expand_stream
         self.reduce_stream = reduce_stream
 
+        # Choose block type based on dual_stream config
+        if config.dual_stream:
+            blocks = [DualStreamBlock(config) for _ in range(config.n_layer)]
+        else:
+            blocks = [Block(config, i, init_hc) for i in range(config.n_layer)]
+
         self.transformer = nn.ModuleDict(
             dict(
                 wte=nn.Embedding(config.vocab_size, config.n_embd),
                 wpe=nn.Embedding(config.block_size, config.n_embd),
                 drop=nn.Dropout(config.dropout),
-                h=nn.ModuleList(
-                    [Block(config, i, init_hc) for i in range(config.n_layer)]
-                ),
+                h=nn.ModuleList(blocks),
                 ln_f=LayerNorm(config.n_embd, bias=config.bias),
             )
         )
