@@ -1,0 +1,4 @@
+
+# Training logs and wandb
+logs/
+wandb/
