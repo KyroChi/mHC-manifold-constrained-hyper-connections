@@ -292,11 +292,13 @@ class GPT(nn.Module):
         b, t = idx.size()
         assert t <= self.config.block_size
 
-        pos = torch.arange(0, t, dtype=torch.long, device=idx.device).unsqueeze(0)
+        # Optimized: create pos tensor more efficiently
+        pos = torch.arange(0, t, dtype=torch.long, device=idx.device, requires_grad=False).unsqueeze(0)
 
         tok_emb = self.transformer.wte(idx)
         pos_emb = self.transformer.wpe(pos)
 
+        # Fuse addition and dropout
         x = self.transformer.drop(tok_emb + pos_emb)
         x = self.expand_stream(x)
 

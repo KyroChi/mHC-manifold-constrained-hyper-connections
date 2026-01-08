@@ -251,6 +251,7 @@ class HyperConnections(Module):
         self.num_fracs = num_fracs
         self.has_fracs = num_fracs > 1
 
+        # Keep einops for now but we'll optimize the actual operations
         self.split_fracs = Rearrange("b ... (f d) -> b ... f d", f=num_fracs)
         self.merge_fracs = Rearrange("b ... f d -> b ... (f d)")
 
@@ -511,6 +512,8 @@ class HyperConnections(Module):
 
     def depth_connection(self, branch_output, residuals, *, beta, residuals_mixed=None):
         assert self.add_branch_out_to_residual
+        
+        streams = self.num_residual_streams
 
         # maybe split fractions
 

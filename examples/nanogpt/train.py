@@ -55,7 +55,7 @@ gradient_accumulation_steps = 1
 
 seed = 1337
 
-# dataset: "shakespeare_char" or "fineweb10B"
+# dataset: "shakespeare_char", "fineweb10B", or "openwebtext"
 dataset = "shakespeare_char"
 
 # hyper-connections config
@@ -198,9 +198,11 @@ else:
 # -----------------------------------------------------------------------------
 # Data loading
 
-# Use FINEWEB_DATA_DIR env var if set, otherwise fall back to relative path
+# Use environment variable for data directory if set, otherwise fall back to relative path
 if dataset == "fineweb10B":
     data_dir = os.environ.get("FINEWEB_DATA_DIR", os.path.join(os.path.dirname(__file__), "data", dataset))
+elif dataset == "openwebtext":
+    data_dir = os.environ.get("OWT_DATA_DIR", os.path.join(os.path.dirname(__file__), "data", dataset))
 else:
     data_dir = os.path.join(os.path.dirname(__file__), "data", dataset)
 
@@ -249,6 +251,26 @@ if dataset == "fineweb10B":
         print(f"Train tokens: {len(train_data):,}, Val tokens: {len(val_data):,}")
 
     vocab_size = 50304  # GPT-2 vocab size rounded up for efficiency
+elif dataset == "openwebtext":
+    # OpenWebText: tokenized GPT-2 format (train.bin, val.bin, meta.json)
+    train_path = os.path.join(data_dir, "train.bin")
+    val_path = os.path.join(data_dir, "val.bin")
+    meta_path = os.path.join(data_dir, "meta.json")
+
+    assert os.path.exists(train_path), f"train.bin not found in {data_dir}. Run prepare.py first."
+    assert os.path.exists(val_path), f"val.bin not found in {data_dir}. Run prepare.py first."
+    assert os.path.exists(meta_path), f"meta.json not found in {data_dir}. Run prepare.py first."
+
+    train_data = torch.load(train_path, weights_only=True)
+    val_data = torch.load(val_path, weights_only=True)
+
+    with open(meta_path, "r") as f:
+        meta = json.load(f)
+
+    vocab_size = meta["vocab_size"]
+    
+    if master_process:
+        print(f"Train tokens: {len(train_data):,}, Val tokens: {len(val_data):,}")
 else:
     # Shakespeare char-level (legacy)
     train_path = os.path.join(data_dir, "train.bin")

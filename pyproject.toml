@@ -40,6 +40,8 @@ Repository = "https://github.com/tokenbender/mHC-manifold-constrained-hyper-conn
 [project.optional-dependencies]
 examples = [
     "huggingface-hub>=0.20.0",
+    "datasets>=2.0.0",
+    "tiktoken>=0.5.0",
 ]
 
 [tool.pytest.ini_options]

@@ -2,13 +2,14 @@
 #SBATCH --job-name=nanogpt-mhc-ablations
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gpus-per-node=4
-#SBATCH --cpus-per-task=32
+#SBATCH --gpus-per-node=2
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
 #SBATCH --time=24:00:00
 #SBATCH --output=/weka/kyle/research/nanoGPT-mHC/examples/nanogpt/logs/ablations_%j_%a.out
 #SBATCH --error=/weka/kyle/research/nanoGPT-mHC/examples/nanogpt/logs/ablations_%j_%a.err
 #SBATCH --array=0-2
+#SBATCH --exclusive=false
 
 # mHC Ablations: baseline, HC, and mHC experiments
 # Usage: sbatch slurm/run_ablations.sbatch
@@ -52,12 +53,15 @@ echo "Running config: $CONFIG"
 echo "Data directory: $FINEWEB_DATA_DIR"
 echo "wandb entity: ${WANDB_ENTITY:-<default>}"
 echo "wandb project: $WANDB_PROJECT"
+echo "GPUs per job: 2"
+echo "Memory: 256GB"
 echo "=============================================="
 
-# Run training with torchrun for 4 GPUs
+# Run training with torchrun for 2 GPUs
+# Each job uses 2 GPUs, allowing multiple jobs per node for efficient packing
 torchrun \
     --standalone \
-    --nproc_per_node=4 \
+    --nproc_per_node=2 \
     train.py \
     "$CONFIG" \
     wandb_project="$WANDB_PROJECT"
